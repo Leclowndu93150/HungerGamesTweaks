@@ -86,6 +86,7 @@ public class StadiumMicClient {
         alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
         alSource3f(source, AL_POSITION, config.sourceX, config.sourceY, config.sourceZ);
         alSourcef(source, AL_ROLLOFF_FACTOR, 0.0f);
+        alSourcef(source, AL_GAIN, config.volume);
 
         alSourcei(source, AL_DIRECT_FILTER, directFilter);
         alSource3i(source, AL_AUXILIARY_SEND_FILTER, effectSlot, 0, AL_FILTER_NULL);

@@ -15,18 +15,34 @@ public class StadiumMicConfig {
 
     private static StadiumMicConfig INSTANCE;
 
+    public String _comment_distance = "Max distance (in blocks) at which players receive the audio from the server";
     public float distance = 10000.0f;
+
+    public String _comment_volume = "Master volume of the stadium mic output (0.0 = silent, 1.0 = normal, 2.0+ = amplified)";
+    public float volume = 1.0f;
+
+    public String _comment_source = "World position the sound appears to come from (like a PA speaker in the sky)";
     public float sourceX = 0.0f;
     public float sourceY = 150.0f;
     public float sourceZ = 0.0f;
+
+    public String _comment_directGain = "Volume of the dry/direct signal (0.0 = muted, 1.0 = full). Lower values make reverb more prominent";
+    public float directGain = 0.5f;
+
+    public String _comment_directHfGain = "High-frequency rolloff on the direct signal (0.0 = very muffled, 1.0 = crisp). Lower values sound more distant";
+    public float directHfGain = 0.7f;
+
+    public String _comment_reverb = "EAX Reverb settings based on the SPORT_STADIUMTANNOY preset. Tweak these to change the echo feel";
     public float reverbDecay = 1.8f;
     public float reverbGain = 0.25f;
     public float reverbDensity = 0.4f;
     public float reverbDiffusion = 0.8f;
+
+    public String _comment_reverbLateGain = "Volume of the late reverb tail (the lingering echo)";
     public float reverbLateGain = 0.35f;
+
+    public String _comment_reverbReflectionsGain = "Volume of early reflections (the initial bounce)";
     public float reverbReflectionsGain = 0.15f;
-    public float directGain = 0.5f;
-    public float directHfGain = 0.7f;
 
     public static StadiumMicConfig get() {
         if (INSTANCE == null) {
