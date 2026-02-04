@@ -1,12 +1,16 @@
 package com.leclowndu93150.hungertweaks;
 
+import com.leclowndu93150.hungertweaks.network.StadiumMicSyncPayload;
+import com.leclowndu93150.hungertweaks.voicechat.StadiumMicManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -60,6 +64,33 @@ public class HungerGamesCommand {
                     ctx.getSource().sendSuccess(() -> Component.literal("All freeze positions cleared!").withStyle(ChatFormatting.RED), true);
                     return 1;
                 }))
+                .then(Commands.literal("mic")
+                        .executes(ctx -> {
+                            ServerPlayer player = ctx.getSource().getPlayerOrException();
+                            return toggleMic(ctx.getSource(), player);
+                        })
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .executes(ctx -> {
+                                    ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
+                                    return toggleMic(ctx.getSource(), target);
+                                })
+                        )
+                )
         );
+    }
+
+    private static int toggleMic(CommandSourceStack source, ServerPlayer target) {
+        boolean nowActive = StadiumMicManager.get().toggle(target.getUUID());
+        StadiumMicSyncPayload payload = new StadiumMicSyncPayload(StadiumMicManager.get().getActiveMics());
+        for (ServerPlayer p : source.getServer().getPlayerList().getPlayers()) {
+            ServerPlayNetworking.send(p, payload);
+        }
+        String name = target.getName().getString();
+        if (nowActive) {
+            source.sendSuccess(() -> Component.literal("Stadium mic ON for " + name).withStyle(ChatFormatting.GREEN), true);
+        } else {
+            source.sendSuccess(() -> Component.literal("Stadium mic OFF for " + name).withStyle(ChatFormatting.RED), true);
+        }
+        return 1;
     }
 }

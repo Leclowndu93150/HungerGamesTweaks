@@ -15,6 +15,9 @@
     ],
     "main": [
       "com.leclowndu93150.hungertweaks.Hungertweaks"
+    ],
+    "voicechat": [
+      "com.leclowndu93150.hungertweaks.voicechat.StadiumMicPlugin"
     ]
   },
   "accessWidener": "hungertweaks.accesswidener",
@@ -25,5 +28,8 @@
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",
     "minecraft": "${minecraft_version}"
+  },
+  "suggests": {
+    "voicechat": "*"
   }
 }

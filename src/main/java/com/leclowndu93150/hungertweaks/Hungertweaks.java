@@ -1,6 +1,9 @@
 package com.leclowndu93150.hungertweaks;
 
+import com.leclowndu93150.hungertweaks.config.StadiumMicConfig;
 import com.leclowndu93150.hungertweaks.network.FreezePositionsSyncPayload;
+import com.leclowndu93150.hungertweaks.network.StadiumMicSyncPayload;
+import com.leclowndu93150.hungertweaks.voicechat.StadiumMicManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -10,11 +13,13 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
@@ -31,9 +36,12 @@ public class Hungertweaks implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        StadiumMicConfig.load();
+
         Registry.register(BuiltInRegistries.ITEM, FREEZE_WAND_KEY, FREEZE_WAND);
 
         PayloadTypeRegistry.playS2C().register(FreezePositionsSyncPayload.TYPE, FreezePositionsSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(StadiumMicSyncPayload.TYPE, StadiumMicSyncPayload.STREAM_CODEC);
 
         CommandRegistrationCallback.EVENT.register(HungerGamesCommand::register);
 
@@ -46,6 +54,17 @@ public class Hungertweaks implements ModInitializer {
             HungerGamesManager manager = HungerGamesManager.get(server);
             manager.onPlayerJoin(handler.player);
             manager.syncPositionsToPlayer(handler.player);
+            ServerPlayNetworking.send(handler.player, new StadiumMicSyncPayload(StadiumMicManager.get().getActiveMics()));
+        });
+
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            if (StadiumMicManager.get().isActive(handler.player.getUUID())) {
+                StadiumMicManager.get().deactivate(handler.player.getUUID());
+                StadiumMicSyncPayload payload = new StadiumMicSyncPayload(StadiumMicManager.get().getActiveMics());
+                for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                    ServerPlayNetworking.send(p, payload);
+                }
+            }
         });
 
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
