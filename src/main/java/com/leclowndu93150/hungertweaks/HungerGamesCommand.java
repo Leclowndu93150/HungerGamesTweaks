@@ -1,5 +1,8 @@
 package com.leclowndu93150.hungertweaks;
 
+import com.leclowndu93150.hungertweaks.config.StadiumMicConfig;
+import com.leclowndu93150.hungertweaks.hunter.HunterSpawnManager;
+import com.leclowndu93150.hungertweaks.network.StadiumMicConfigSyncPayload;
 import com.leclowndu93150.hungertweaks.network.StadiumMicSyncPayload;
 import com.leclowndu93150.hungertweaks.voicechat.StadiumMicManager;
 import com.mojang.brigadier.CommandDispatcher;
@@ -11,8 +14,12 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.ResourceArgument;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 
 public class HungerGamesCommand {
 
@@ -64,6 +71,14 @@ public class HungerGamesCommand {
                     ctx.getSource().sendSuccess(() -> Component.literal("All freeze positions cleared!").withStyle(ChatFormatting.RED), true);
                     return 1;
                 }))
+                .then(Commands.literal("micsync").executes(ctx -> {
+                    StadiumMicConfigSyncPayload payload = StadiumMicConfigSyncPayload.fromConfig(StadiumMicConfig.get());
+                    for (ServerPlayer p : ctx.getSource().getServer().getPlayerList().getPlayers()) {
+                        ServerPlayNetworking.send(p, payload);
+                    }
+                    ctx.getSource().sendSuccess(() -> Component.literal("Stadium mic config synced to all players").withStyle(ChatFormatting.GREEN), true);
+                    return 1;
+                }))
                 .then(Commands.literal("mic")
                         .executes(ctx -> {
                             ServerPlayer player = ctx.getSource().getPlayerOrException();
@@ -76,7 +91,69 @@ public class HungerGamesCommand {
                                 })
                         )
                 )
+                .then(Commands.literal("hunter")
+                        .then(Commands.literal("spawn")
+                                .then(Commands.argument("entity", ResourceArgument.resource(registryAccess, Registries.ENTITY_TYPE))
+                                        .executes(ctx -> {
+                                            EntityType<?> type = ResourceArgument.getEntityType(ctx, "entity").value();
+                                            return spawnHunters(ctx.getSource(), type, 1, null);
+                                        })
+                                        .then(Commands.argument("count", IntegerArgumentType.integer(1, 100))
+                                                .executes(ctx -> {
+                                                    EntityType<?> type = ResourceArgument.getEntityType(ctx, "entity").value();
+                                                    int count = IntegerArgumentType.getInteger(ctx, "count");
+                                                    return spawnHunters(ctx.getSource(), type, count, null);
+                                                })
+                                                .then(Commands.argument("target", EntityArgument.player())
+                                                        .executes(ctx -> {
+                                                            EntityType<?> type = ResourceArgument.getEntityType(ctx, "entity").value();
+                                                            int count = IntegerArgumentType.getInteger(ctx, "count");
+                                                            ServerPlayer target = EntityArgument.getPlayer(ctx, "target");
+                                                            return spawnHunters(ctx.getSource(), type, count, target);
+                                                        })
+                                                )
+                                        )
+                                )
+                        )
+                        .then(Commands.literal("kill")
+                                .executes(ctx -> {
+                                    HunterSpawnManager manager = HunterSpawnManager.get(ctx.getSource().getServer());
+                                    int count = manager.getActiveHunterCount();
+                                    manager.killAllHunters(ctx.getSource().getServer());
+                                    ctx.getSource().sendSuccess(() -> Component.literal("Killed " + count + " hunters").withStyle(ChatFormatting.RED), true);
+                                    return 1;
+                                })
+                        )
+                        .then(Commands.literal("clear")
+                                .executes(ctx -> {
+                                    HunterSpawnManager manager = HunterSpawnManager.get(ctx.getSource().getServer());
+                                    manager.clearPositions();
+                                    manager.syncPositionsToAll(ctx.getSource().getServer());
+                                    ctx.getSource().sendSuccess(() -> Component.literal("Cleared all hunter spawn positions").withStyle(ChatFormatting.RED), true);
+                                    return 1;
+                                })
+                        )
+                )
         );
+    }
+
+    private static int spawnHunters(CommandSourceStack source, EntityType<?> type, int count, ServerPlayer target) {
+        HunterSpawnManager manager = HunterSpawnManager.get(source.getServer());
+
+        if (manager.getSpawnPositions().isEmpty()) {
+            source.sendFailure(Component.literal("No hunter spawn positions set! Use the Hunter Spawn Wand first."));
+            return 0;
+        }
+
+        java.util.List<Mob> spawned;
+        if (target != null) {
+            spawned = manager.spawnHunters(source.getServer(), type, target, count);
+            source.sendSuccess(() -> Component.literal("Spawned " + spawned.size() + " hunters targeting " + target.getName().getString()).withStyle(ChatFormatting.GREEN), true);
+        } else {
+            spawned = manager.spawnHuntersToClosest(source.getServer(), type, count);
+            source.sendSuccess(() -> Component.literal("Spawned " + spawned.size() + " hunters targeting closest player").withStyle(ChatFormatting.GREEN), true);
+        }
+        return spawned.size();
     }
 
     private static int toggleMic(CommandSourceStack source, ServerPlayer target) {

@@ -18,6 +18,9 @@
     ],
     "voicechat": [
       "com.leclowndu93150.hungertweaks.voicechat.StadiumMicPlugin"
+    ],
+    "modmenu": [
+      "com.leclowndu93150.hungertweaks.client.config.ModMenuIntegration"
     ]
   },
   "accessWidener": "hungertweaks.accesswidener",
@@ -30,6 +33,7 @@
     "minecraft": "${minecraft_version}"
   },
   "suggests": {
-    "voicechat": "*"
+    "voicechat": "*",
+    "modmenu": "*"
   }
 }

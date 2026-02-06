@@ -83,13 +83,27 @@ public class StadiumMicClient {
         StadiumMicConfig config = StadiumMicConfig.get();
         int source = event.getSource();
 
+        float currentGain = alGetSourcef(source, AL_GAIN);
+
         alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
         alSource3f(source, AL_POSITION, config.sourceX, config.sourceY, config.sourceZ);
         alSourcef(source, AL_ROLLOFF_FACTOR, 0.0f);
-        alSourcef(source, AL_GAIN, config.volume);
+        alSourcef(source, AL_GAIN, currentGain * config.volume);
 
         alSourcei(source, AL_DIRECT_FILTER, directFilter);
         alSource3i(source, AL_AUXILIARY_SEND_FILTER, effectSlot, 0, AL_FILTER_NULL);
+    }
+
+    public static void resetEfx() {
+        if (initialized) {
+            if (effectSlot != 0) alDeleteAuxiliaryEffectSlots(effectSlot);
+            if (effect != 0) alDeleteEffects(effect);
+            if (directFilter != 0) alDeleteFilters(directFilter);
+        }
+        initialized = false;
+        effectSlot = 0;
+        effect = 0;
+        directFilter = 0;
     }
 
     public static void setActiveMics(Set<UUID> mics) {

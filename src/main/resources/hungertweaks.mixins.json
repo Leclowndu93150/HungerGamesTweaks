@@ -4,6 +4,7 @@
   "package": "com.leclowndu93150.hungertweaks.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "MobAccessor",
     "PlayerMovementMixin"
   ],
   "client": [

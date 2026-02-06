@@ -1,7 +1,11 @@
 package com.leclowndu93150.hungertweaks;
 
 import com.leclowndu93150.hungertweaks.config.StadiumMicConfig;
+import com.leclowndu93150.hungertweaks.hunter.HunterSpawnManager;
+import com.leclowndu93150.hungertweaks.hunter.HunterSpawnWandItem;
 import com.leclowndu93150.hungertweaks.network.FreezePositionsSyncPayload;
+import com.leclowndu93150.hungertweaks.network.HunterSpawnPositionsSyncPayload;
+import com.leclowndu93150.hungertweaks.network.StadiumMicConfigSyncPayload;
 import com.leclowndu93150.hungertweaks.network.StadiumMicSyncPayload;
 import com.leclowndu93150.hungertweaks.voicechat.StadiumMicManager;
 import net.fabricmc.api.ModInitializer;
@@ -34,14 +38,39 @@ public class Hungertweaks implements ModInitializer {
             new Item.Properties().setId(FREEZE_WAND_KEY).stacksTo(1).rarity(Rarity.EPIC)
     );
 
+    public static final ResourceKey<Item> HUNTER_SPAWN_WAND_KEY =
+            ResourceKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("hungertweaks", "hunter_spawn_wand"));
+
+    public static final Item HUNTER_SPAWN_WAND = new HunterSpawnWandItem(
+            new Item.Properties().setId(HUNTER_SPAWN_WAND_KEY).stacksTo(1).rarity(Rarity.EPIC)
+    );
+
     @Override
     public void onInitialize() {
         StadiumMicConfig.load();
 
         Registry.register(BuiltInRegistries.ITEM, FREEZE_WAND_KEY, FREEZE_WAND);
+        Registry.register(BuiltInRegistries.ITEM, HUNTER_SPAWN_WAND_KEY, HUNTER_SPAWN_WAND);
 
         PayloadTypeRegistry.playS2C().register(FreezePositionsSyncPayload.TYPE, FreezePositionsSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(HunterSpawnPositionsSyncPayload.TYPE, HunterSpawnPositionsSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(StadiumMicSyncPayload.TYPE, StadiumMicSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(StadiumMicConfigSyncPayload.TYPE, StadiumMicConfigSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(StadiumMicConfigSyncPayload.TYPE, StadiumMicConfigSyncPayload.STREAM_CODEC);
+
+        ServerPlayNetworking.registerGlobalReceiver(StadiumMicConfigSyncPayload.TYPE, (payload, context) -> {
+            ServerPlayer sender = context.player();
+            if (!sender.hasPermissions(2)) {
+                return;
+            }
+            context.server().execute(() -> {
+                payload.applyToConfig(StadiumMicConfig.get());
+                StadiumMicConfig.save();
+                for (ServerPlayer p : context.server().getPlayerList().getPlayers()) {
+                    ServerPlayNetworking.send(p, payload);
+                }
+            });
+        });
 
         CommandRegistrationCallback.EVENT.register(HungerGamesCommand::register);
 
@@ -54,7 +83,9 @@ public class Hungertweaks implements ModInitializer {
             HungerGamesManager manager = HungerGamesManager.get(server);
             manager.onPlayerJoin(handler.player);
             manager.syncPositionsToPlayer(handler.player);
+            HunterSpawnManager.get(server).syncPositionsToPlayer(handler.player);
             ServerPlayNetworking.send(handler.player, new StadiumMicSyncPayload(StadiumMicManager.get().getActiveMics()));
+            ServerPlayNetworking.send(handler.player, StadiumMicConfigSyncPayload.fromConfig(StadiumMicConfig.get()));
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -99,6 +130,7 @@ public class Hungertweaks implements ModInitializer {
 
         ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(entries -> {
             entries.accept(FREEZE_WAND);
+            entries.accept(HUNTER_SPAWN_WAND);
         });
     }
 }
