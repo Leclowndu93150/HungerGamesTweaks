@@ -80,7 +80,7 @@ public class HuntPlayerGoal extends Goal {
         if (!(mob.level() instanceof ServerLevel level)) return;
 
         List<ServerPlayer> players = level.getServer().getPlayerList().getPlayers().stream()
-                .filter(p -> p.isAlive() && !p.isSpectator() && !p.isCreative())
+                .filter(p -> p.isAlive() && !p.isSpectator() && !p.isCreative() && !p.hasPermissions(2))
                 .toList();
 
         if (players.isEmpty()) {

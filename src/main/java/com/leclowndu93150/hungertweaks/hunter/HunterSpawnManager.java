@@ -16,6 +16,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.world.phys.Vec3;
@@ -39,6 +40,7 @@ public class HunterSpawnManager extends SavedData {
 
     private final List<BlockPos> spawnPositions;
     private final Set<UUID> activeHunters = new HashSet<>();
+    private final Map<UUID, ChunkPos> hunterChunks = new HashMap<>();
 
     public HunterSpawnManager() {
         this(new ArrayList<>());
@@ -83,30 +85,35 @@ public class HunterSpawnManager extends SavedData {
         if (spawnPositions.isEmpty()) return Collections.emptyList();
 
         ServerLevel level = server.overworld();
+
+        BlockPos closestSpawn = spawnPositions.stream()
+                .min(Comparator.comparingDouble(p -> target.distanceToSqr(Vec3.atBottomCenterOf(p))))
+                .orElse(spawnPositions.getFirst());
+
         List<Mob> spawned = new ArrayList<>();
 
         for (int i = 0; i < count; i++) {
-            BlockPos pos = spawnPositions.get(i % spawnPositions.size());
-            Vec3 spawnPos = Vec3.atBottomCenterOf(pos.above());
+            Vec3 spawnPos = Vec3.atBottomCenterOf(closestSpawn.above());
 
-            Entity entity = entityType.spawn(level, pos.above(), EntitySpawnReason.COMMAND);
+            Entity entity = entityType.spawn(level, closestSpawn.above(), EntitySpawnReason.COMMAND);
             if (entity instanceof Mob mob) {
                 mob.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
                 ((MobAccessor) mob).getGoalSelector().addGoal(0, new HuntPlayerGoal(mob, target));
                 mob.setPersistenceRequired();
                 activeHunters.add(mob.getUUID());
+                forceLoadChunk(level, mob);
                 spawned.add(mob);
             }
         }
         return spawned;
     }
 
-    public List<Mob> spawnHuntersToClosest(MinecraftServer server, EntityType<?> entityType, int count) {
+    public List<Mob> spawnHuntersToClosest(MinecraftServer server, EntityType<?> entityType, int count, ServerPlayer sender) {
         if (spawnPositions.isEmpty()) return Collections.emptyList();
 
         ServerLevel level = server.overworld();
         List<ServerPlayer> players = server.getPlayerList().getPlayers().stream()
-                .filter(p -> p.isAlive() && !p.isSpectator() && !p.isCreative())
+                .filter(p -> p.isAlive() && !p.isSpectator() && !p.isCreative() && p != sender)
                 .toList();
         List<Mob> spawned = new ArrayList<>();
 
@@ -124,10 +131,40 @@ public class HunterSpawnManager extends SavedData {
                 ((MobAccessor) mob).getGoalSelector().addGoal(0, new HuntPlayerGoal(mob, closest));
                 mob.setPersistenceRequired();
                 activeHunters.add(mob.getUUID());
+                forceLoadChunk(level, mob);
                 spawned.add(mob);
             }
         }
         return spawned;
+    }
+
+    public void tick(MinecraftServer server) {
+        if (activeHunters.isEmpty()) return;
+
+        ServerLevel level = server.overworld();
+        Iterator<UUID> it = activeHunters.iterator();
+        while (it.hasNext()) {
+            UUID uuid = it.next();
+            Entity entity = level.getEntity(uuid);
+            if (entity == null || !entity.isAlive()) {
+                ChunkPos old = hunterChunks.remove(uuid);
+                if (old != null) {
+                    unforceLoadChunkIfUnused(level, old);
+                }
+                it.remove();
+                continue;
+            }
+
+            ChunkPos current = entity.chunkPosition();
+            ChunkPos tracked = hunterChunks.get(uuid);
+            if (tracked == null || !tracked.equals(current)) {
+                if (tracked != null) {
+                    unforceLoadChunkIfUnused(level, tracked);
+                }
+                level.setChunkForced(current.x, current.z, true);
+                hunterChunks.put(uuid, current);
+            }
+        }
     }
 
     public void killAllHunters(MinecraftServer server) {
@@ -137,8 +174,13 @@ public class HunterSpawnManager extends SavedData {
             if (entity != null) {
                 entity.discard();
             }
+            ChunkPos chunk = hunterChunks.get(uuid);
+            if (chunk != null) {
+                level.setChunkForced(chunk.x, chunk.z, false);
+            }
         }
         activeHunters.clear();
+        hunterChunks.clear();
     }
 
     public int getActiveHunterCount() {
@@ -154,5 +196,18 @@ public class HunterSpawnManager extends SavedData {
 
     public void syncPositionsToPlayer(ServerPlayer player) {
         ServerPlayNetworking.send(player, new HunterSpawnPositionsSyncPayload(new ArrayList<>(spawnPositions)));
+    }
+
+    private void forceLoadChunk(ServerLevel level, Mob mob) {
+        ChunkPos chunkPos = mob.chunkPosition();
+        level.setChunkForced(chunkPos.x, chunkPos.z, true);
+        hunterChunks.put(mob.getUUID(), chunkPos);
+    }
+
+    private void unforceLoadChunkIfUnused(ServerLevel level, ChunkPos chunk) {
+        for (ChunkPos active : hunterChunks.values()) {
+            if (active.equals(chunk)) return;
+        }
+        level.setChunkForced(chunk.x, chunk.z, false);
     }
 }

@@ -75,8 +75,8 @@ public class Hungertweaks implements ModInitializer {
         CommandRegistrationCallback.EVENT.register(HungerGamesCommand::register);
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            HungerGamesManager manager = HungerGamesManager.get(server);
-            manager.tick(server);
+            HungerGamesManager.get(server).tick(server);
+            HunterSpawnManager.get(server).tick(server);
         });
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {

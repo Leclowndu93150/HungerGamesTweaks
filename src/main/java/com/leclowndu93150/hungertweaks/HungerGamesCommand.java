@@ -150,7 +150,8 @@ public class HungerGamesCommand {
             spawned = manager.spawnHunters(source.getServer(), type, target, count);
             source.sendSuccess(() -> Component.literal("Spawned " + spawned.size() + " hunters targeting " + target.getName().getString()).withStyle(ChatFormatting.GREEN), true);
         } else {
-            spawned = manager.spawnHuntersToClosest(source.getServer(), type, count);
+            ServerPlayer sender = source.getPlayer();
+            spawned = manager.spawnHuntersToClosest(source.getServer(), type, count, sender);
             source.sendSuccess(() -> Component.literal("Spawned " + spawned.size() + " hunters targeting closest player").withStyle(ChatFormatting.GREEN), true);
         }
         return spawned.size();
